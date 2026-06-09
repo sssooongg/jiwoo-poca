@@ -561,38 +561,60 @@
             return mAlb && mTab && mVer && mFs;
         });
 
-        filtered.sort((a, b) => {
+     filtered.sort((a, b) => {
+            // 1. 메뉴 배열 순서대로 자동으로 앨범 우선순위 찾기
             const getAlbumPriority = (pc) => {
-                const name = pc.name.toUpperCase();
-                if (name.includes('THE CHASE')) return 1;
-                if (name.includes('STYLE')) return 2;
-                if (name.includes('FOCUS')) return 3;
-                if (name.includes('RUDE!')) return 4;
-                const albumOrder = { 'The Chase': 1, 'STYLE': 2, 'FOCUS': 3, 'RUDE!': 4, '유닛 포카': 5, 'MD 포카': 6, '기타': 7 };
-                return albumOrder[pc.album] || 99;
+                let priority = 999;
+                
+                // '전체'(index 0) 다음부터 '유닛 포카'가 나오기 전까지의 메뉴를 정규 앨범으로 인식
+                const unitIndex = menuStructure.findIndex(m => m.name === '유닛 포카');
+                const albumLimit = unitIndex !== -1 ? unitIndex : menuStructure.length;
+
+                for (let i = 1; i < albumLimit; i++) {
+                    const menuName = menuStructure[i].name.toLowerCase();
+                    // 포카 앨범 속성이 일치하거나, 포카 이름에 해당 앨범명이 들어있으면 그 메뉴의 인덱스를 우선순위로 줌
+                    if (pc.album.toLowerCase() === menuName || pc.name.toLowerCase().includes(menuName)) {
+                        priority = i;
+                        break;
+                    }
+                }
+
+                // 만약 위에서 못 찾았다면(MD 포카, 기타 등) 해당 앨범이 메뉴에서 몇 번째인지 찾아서 배정
+                if (priority === 999) {
+                    const fallback = menuStructure.findIndex(m => m.name === pc.album);
+                    priority = fallback !== -1 ? fallback : 999;
+                }
+                return priority;
             };
+
             const albA = getAlbumPriority(a);
             const albB = getAlbumPriority(b);
             if (albA !== albB) return albA - albB;
 
+            // 2. 카테고리 순서 (앨범 포카 -> 예판 -> 럭키드로우 -> 팬싸 -> 기타)
             const catOrder = { '앨범 포카': 1, '예판 특전': 2, '럭키드로우': 3, '팬싸 특전': 4, '기타': 5 };
             const cA = catOrder[a.category] || 99;
             const cB = catOrder[b.category] || 99;
             if (cA !== cB) return cA - cB;
 
+            // 3. 폴라로이드 기준 유지 (이름이 똑같을 경우 폴라가 아닌 것이 먼저 오도록)
             const cleanA = a.name.replace(/폴라/g, '').replace(/\s+/g, ' ').trim();
             const cleanB = b.name.replace(/폴라/g, '').replace(/\s+/g, ' ').trim();
             if (cleanA === cleanB) return a.name.includes('폴라') - b.name.includes('폴라');
 
+            // 원래 코드 방식 (한글 -> 숫자 -> 영어)
             const getType = (str) => {
-                if (/[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(str[0])) return 1;
-                if (/[0-9]/.test(str[0])) return 2;
-                if (/[a-zA-Z]/.test(str[0])) return 3;
-                return 4;
+                if (/[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(str[0])) return 1; 
+                if (/[0-9]/.test(str[0])) return 2;             
+                if (/[a-zA-Z]/.test(str[0])) return 3;          
+                return 4;                                       
             };
+            
             const typeA = getType(cleanA);
             const typeB = getType(cleanB);
             if (typeA !== typeB) return typeA - typeB;
+
+            // 타입이 같다면 가나다/ABC 오름차순으로 정렬
             return cleanA.localeCompare(cleanB, 'ko', { numeric: true });
         });
 
